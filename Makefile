@@ -1,5 +1,4 @@
-all:
-	gcc commandparser.c clientinterface.c -o client
+all: fm
 
 fm:
 	gcc filemanager.c -o filemanager
@@ -7,3 +6,5 @@ fm:
 debug:
 	gcc filemanager.c -g -o filemanager
 
+clean:
+	rm filemanager
