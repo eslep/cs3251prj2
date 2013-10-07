@@ -115,7 +115,7 @@ void sendCommand(char *addr, unsigned char* command)
     unsigned int StringLen=strlen(command);//strlen(message);
     printf("\nLength: %u\n",StringLen);
     unsigned int sentBytes=send(clientSock,command,StringLen,0);
-    printf ("sentBytes: %u", sentBytes);
+    printf ("sentBytes: %u\n", sentBytes);
     if(sentBytes!=StringLen)
         DieWithError("send() sent a different number of bytes than expected");
 

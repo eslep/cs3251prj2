@@ -17,8 +17,10 @@
 #include <arpa/inet.h>
 #include <string.h>
 #include <pthread.h>
+#include "types.h"
+#include "filemanager.h"
 #define MAXPENDING 5 //Maximum outstanding connection
-#define RCVBUFSIZE 512
+
 
 void DieWithError(char*errorMessage); //Error handling function
 void HandleTCPClient(int clntSocket); //TCP client handling function
@@ -28,11 +30,14 @@ void *ThreadMain(void *arg);            //Structure of arguments to pass to clie
 void HandleTCPClient(int clntSocket);
 
 //Structure of arguments to pass to client thread
-struct ThreadArgs
+typedef struct ThreadArgs
 {
     int clntSock;
-};
+} ThreadArgs;
 
+
+connection client_list[15];
+int numClients=0;
 
 int main(int argc, char *argv[])
 {
@@ -57,14 +62,17 @@ int main(int argc, char *argv[])
     for(;;) //Run forever
     {
         clntSock = AcceptTCPConnection(servSock);
+	connection new_client;
+	new_client.clientSock = clntSock;
         if((threadArgs=(struct ThreadArgs *) malloc(sizeof(struct ThreadArgs)))==NULL)
             DieWithError("malloc() failed");
-        threadArgs -> clntSock =clntSock;
+        threadArgs -> clntSock =new_client.clientSock;
         
         //create client thread
-        if(pthread_create(&threadID,NULL, ThreadMain,(void*) threadArgs)!=0)
+        if(pthread_create(&(new_client.threadID),NULL, ThreadMain,(void*) threadArgs)!=0)
             DieWithError("pthread_create() failed");
-        
+        client_list[numClients] = new_client;
+	numClients++;
         printf("with thread %ld\n",(long int) threadID);
     }
 }
@@ -135,6 +143,15 @@ void *ThreadMain(void *threadArgs)
     return (NULL);
 }
 
+/*
+ * Process commands sent to the server
+ *
+ */
+void HandleCommand(char* cmd)
+{
+
+}
+
 void HandleTCPClient(int clntSocket)
 {
     //printf("handling client");
@@ -166,7 +183,6 @@ void HandleTCPClient(int clntSocket)
     //handleCommand(echoBuffer)
     
     printf("close:\n");
-    close(clntSocket);
 }
 
 void DieWithError(char *errorMessage)

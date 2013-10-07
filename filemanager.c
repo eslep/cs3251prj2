@@ -1,6 +1,8 @@
 #include<stdio.h>
 #include<stdlib.h>
+#include<stdint.h>
 #include<string.h>
+#include<pthread.h>
 #include"filemanager.h"
 
 
@@ -21,8 +23,6 @@ unsigned int fnv_hash (void* key, int len)
 }
 
 char* filetypes[] = {"*.mp3","*.wav","*.ogg","*.flac","*.aac","*.wma"};
-file_info file_table[FILETABLE_SIZE];
-int numEntries;
 
 //test code
 /*int main()
@@ -59,10 +59,44 @@ int numEntries;
 	free(list);
 }*/
 
-void updateFiles()
+void serialize_info(char* buf, file_info data)
 {
-	memset(file_table,0,sizeof(file_info)*FILETABLE_SIZE);
-	numEntries = 0;
+	uint16_t* input = (uint16_t*)(&data);
+	int i=0;
+	while( i<(sizeof(data)/2) )
+	{
+		*input = htons(*input);
+		i++;
+	}
+	buf = malloc(sizeof(data));
+	memcpy(buf,input,sizeof(data));
+}
+
+void server_list(connection* connect_info, file_info** result)
+{
+	file_info* file_table = malloc(sizeof(file_info)*FILETABLE_SIZE);
+	int numEntries = updateFiles((file_info**)(&file_table));
+	getList(result, (file_info**)(&file_table), numEntries);
+	free(file_table);
+}
+
+void client_diff(connection* connect_info, file_info** list, file_info** result)
+{
+	file_info* file_table = malloc(sizeof(file_info)*FILETABLE_SIZE);
+	int numEntries = updateFiles((file_info**)(&file_table));
+	getDiff(list,(file_info**)(&file_table),result);
+	free(file_table);
+}
+
+/*
+ * Update a local file_table
+ * @param file_table Pointer to the table to update
+ * @return The number of entries in the file table now
+ */
+int updateFiles(file_info** file_table)
+{
+	memset((*file_table),0,sizeof(file_info)*FILETABLE_SIZE);
+	int numEntries = 0;
 	char result[32];
 	//open pipe to the command
 	FILE *fd = popen("find . -maxdepth 1 -type f -name '*.mp3' -o -name '*.wav' -o -name '*.flac' -o -name '*.ogg' | cut -d '/' -f 2","r");
@@ -92,7 +126,7 @@ void updateFiles()
 				strcpy(entry.checksum,checksum);
 				int index = fnv_hash(entry.filename,strlen(entry.filename))%FILETABLE_SIZE;
 				printf("Hash result: %d\n",index);
-				file_table[index] = entry;
+				(*file_table)[index] = entry;
 				numEntries++;
 			}
 		}
@@ -100,16 +134,18 @@ void updateFiles()
 		pclose(hash_fd);
 	}
 	pclose(fd);
+	return numEntries;
 }
 
 
 /*
- * Function to get the file list
+ * Function to get the file list from the file hash table
  * @param list Pointer to where the list should be stored
+ * @param file_table Pointer to the file hash table to list
  */
-void getList(file_info** list)
+void getList(file_info** list, file_info** file_table, int numEntries)
 {
-	*list = malloc(sizeof(file_info)*(numEntries+1));//malloc space for the file list and
+	*list = malloc(sizeof(file_info)*(numEntries+1));//malloc space for the file list and header entry
 	file_info header;
 	strcpy(header.filename,"header");
 	header.checksum[0] = (char)numEntries;
@@ -119,16 +155,22 @@ void getList(file_info** list)
 	int j=0;
 	while(j<FILETABLE_SIZE)
 	{
-		if(file_table[j].filename[0]!=0)
+		if((*file_table)[j].filename[0]!=0)
 		{
-			(*list)[index] = file_table[j];
+			(*list)[index] = (*file_table)[j];
 			index++;
 		}
 		j++;
 	}
 }
 
-void getDiff(file_info** compareTo, file_info** diff)
+/*
+ * Function to get the diff between a list of files and a file hash table
+ * @param compareTo Pointer to the list to check against
+ * @param file_table Pointer to the file hash table to check against
+ * @param diff Pointer to where the diff list will be stored
+ */
+void getDiff(file_info** compareTo, file_info** file_table, file_info** diff)
 {
 	file_info* header = &((*compareTo)[0]);
 	int lenCompare = (int)((*header).checksum[0]);//get the number of elements in the list from the header
@@ -144,7 +186,7 @@ void getDiff(file_info** compareTo, file_info** diff)
 	while(i<lenCompare)
 	{
 		int key = fnv_hash(list[i].filename,strlen(list[i].filename)) % FILETABLE_SIZE;
-		if(strcmp(file_table[key].checksum,list[i].checksum)!=0)//if we can't find our list item's checksum in the table
+		if(strcmp((*file_table)[key].checksum,list[i].checksum)!=0)//if we can't find our list item's checksum in the table
 		{	
 			(*diff)[index] = list[i];//then add the list item to the diff list
 			index++;

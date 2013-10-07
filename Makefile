@@ -16,14 +16,14 @@ ifeq ($(OS), SunOS)
 	LDFLAGS=-lsocket -lnsl
     endif
 
-all: client server-thread fm
+all: client server-thread
 
 client: client.c
-	$(CC) client.c -o nameChanger
+	$(CC) client.c  -o nameChanger
 
 server-thread: server/server-thread.c
 
-	$(CC) -lcrypto server/server-thread.c -o threadedServer
+	$(CC) -pthread -lcrypto server/server-thread.c -o threadedServer
 
 fm:
 	gcc filemanager.c -o filemanager
@@ -31,6 +31,8 @@ fm:
 debug:
 	gcc filemanager.c -g -o filemanager
 
+fm-test:
+	gcc filemanager.c test.c -o filemanager_test
 
 clean:
-	rm -f nameChanger filemanager threadedServer *.o
+	rm -f nameChanger filemanager threadedServer filemanager_test *.o
