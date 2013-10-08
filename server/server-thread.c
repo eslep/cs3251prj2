@@ -17,18 +17,12 @@
 #include <arpa/inet.h>
 #include <string.h>
 #include <pthread.h>
-#include "../filemanager.h"ls
 #include <stdint.h>
 
-#define MAXPENDING 5 //Maximum outstanding connection
-
-
-void DieWithError(char*errorMessage); //Error handling function
-int CreateTCPServerSocket(unsigned short port); //Create TCP server socket
-int AcceptTCPConnection(int servSock); //accept tcp connection request
-void *ThreadMain(void *arg);            //Structure of arguments to pass to client thread
-int HandleTCPClient(int clntSocket);
-void ReceiveFile(int clientSock, char* filename);
+#define MAXPENDING 100 //Maximum outstanding connection
+#define RCVBUFSIZE 512
+#define SNDBUFSIZE 512
+#define FILETABLE_SIZE 20000
 
 //Structure of arguments to pass to client thread
 typedef struct ThreadArgs
@@ -36,8 +30,24 @@ typedef struct ThreadArgs
     int clntSock;
 } ThreadArgs;
 
+typedef struct
+{
+	char filename[32];
+	char checksum[34];
+} file_info;
 
-connection client_list[15];
+
+void DieWithError(char* errorMessage); //Error handling function
+int CreateTCPServerSocket(unsigned short port); //Create TCP server socket
+int AcceptTCPConnection(int servSock); //accept tcp connection request
+void *ThreadMain(void *arg);            //Structure of arguments to pass to client thread
+int HandleTCPClient(int clntSocket);
+void ReceiveFile(int clientSock, char* filename);
+void getList(file_info** list, file_info** file_table, int numEntries);
+int updateFiles(file_info** file_table);
+unsigned int fnv_hash (void* key, int len);
+
+
 int numClients=0;
 
 int main(int argc, char *argv[])
@@ -63,17 +73,14 @@ int main(int argc, char *argv[])
     for(;;) //Run forever
     {
         clntSock = AcceptTCPConnection(servSock);
-	connection new_client;
-	new_client.clientSock = clntSock;
         if((threadArgs=(struct ThreadArgs *) malloc(sizeof(struct ThreadArgs)))==NULL)
             DieWithError("malloc() failed");
-        threadArgs -> clntSock =new_client.clientSock;
+        threadArgs -> clntSock =clntSock;
         
         //create client thread
-        if(pthread_create(&(new_client.threadID),NULL, ThreadMain,(void*) threadArgs)!=0)
+        if(pthread_create(&threadID,NULL, ThreadMain,(void*) threadArgs)!=0)
             DieWithError("pthread_create() failed");
-        client_list[numClients] = new_client;
-	numClients++;
+        
         printf("with thread %ld\n",(long int) threadID);
     }
 }
@@ -160,7 +167,7 @@ int HandleTCPClient(int clntSocket)
 {
     //printf("handling client");
     char echoBuffer[RCVBUFSIZE];   //Buffer for echo string
-    memset(&echoBuffer,0,RCVBUFSIZE);
+    memset(echoBuffer,0,RCVBUFSIZE);
     int recvMsgSize;
     
     //recieve message from client
@@ -184,17 +191,42 @@ int HandleTCPClient(int clntSocket)
 
     /*int size= (sizeof(echoBuffer)/sizeof(echoBuffer[0]));
     printf("Size: %u", size);*/
+            printf("before");
+
     if(echoBuffer[0]=='s')
     {
         printf("hell yeah\n");
         ReceiveFile(clntSocket, "server/receive.m4a");
     }
-    if(echoBuffer[0]=='q')
+    if(echoBuffer[0]=='q'||recvMsgSize==0)
     {
         printf("close:\n");
         close(clntSocket);
         return 0;
     }
+    else if(echoBuffer[0]=='l')
+    {
+        //getList
+        printf("one");
+        file_info * file_table;
+        int entries=updateFiles(&file_table);
+        file_info* list;
+        getList(&list,&file_table,entries);
+        printf("one");
+        file_info * header = (&list)[0];
+        int numElements= header->checksum[0];
+        printf("NumElements: %u",numElements);
+        //send size of list packet;
+        //while(count<size of list)
+            //send filename length packet
+            // send filename
+    
+        free(header);
+        free(file_table);
+    
+    }
+            printf("after");
+
     return 1;
 
 }
@@ -215,7 +247,7 @@ void ReceiveFile(int clientSock, char* filename)
     printf("Recieve\n");
     //Recieve Size Packet
     /*long int sizeBuff[1];
-    memset(&sizeBuff,0,sizeof(long int));*/
+    memset(sizeBuff,0,sizeof(long int));*/
     uint32_t un=0;
     if(recv(clientSock,&un,sizeof(uint32_t),0)<1)
     {
@@ -232,7 +264,7 @@ void ReceiveFile(int clientSock, char* filename)
     
     //Prepare to recieve data.
     char recvBuff[RCVBUFSIZE];   //Buffer for echo string
-    memset(&recvBuff,0,RCVBUFSIZE);
+    memset(recvBuff,0,RCVBUFSIZE);
 		FILE *filestream = fopen(filename, "a");
 		if(filestream == NULL)
         {
@@ -242,7 +274,7 @@ void ReceiveFile(int clientSock, char* filename)
 		{
             printf("Recieve2\n");
 
-			memset(&recvBuff,0, RCVBUFSIZE);
+			memset(recvBuff,0, RCVBUFSIZE);
 			int fileChunk = 0;
             int temp=0;
             int total=0;
@@ -263,7 +295,7 @@ void ReceiveFile(int clientSock, char* filename)
 			        printf("File write failed.\n");
                     break;
         
-                    memset(&recvBuff,0, RCVBUFSIZE);
+                    memset(recvBuff,0, RCVBUFSIZE);
                    /* if (fileChunk == 0 || fileChunk != 512)
                     {
                         break;
@@ -312,7 +344,7 @@ void sendFile(int clientSock, char* filename)//take in a client socket
     
     //send size packet
     /*long int sizeBuff[1];
-    memset(&sizeBuff,0,sizeof(long int));
+    memset(sizeBuff,0,sizeof(long int));
     printf("Length: %ld\n",sizeBuff[1]);
     sizeBuff[1]=lengthOfFile;
     printf("Length: %ld\n",sizeBuff[1]);
@@ -326,7 +358,7 @@ void sendFile(int clientSock, char* filename)//take in a client socket
 
     //Prepare to send data
     unsigned char sndBuf[SNDBUFSIZE];	    /* Send Buffer */
-    memset(&sndBuf, 0, RCVBUFSIZE);
+    memset(sndBuf, 0, RCVBUFSIZE);
     printf("Sending %s to the server... ", filename);
     FILE *filestream = fopen(filename, "r");
     if(filestream == NULL)
@@ -334,7 +366,7 @@ void sendFile(int clientSock, char* filename)//take in a client socket
         DieWithError("ERROR: File");
     }
 
-		memset(&sndBuf,0, SNDBUFSIZE);
+		memset(sndBuf,0, SNDBUFSIZE);
 		int fileChunk;
         int totalSize=0;
         int temp=0;
@@ -367,3 +399,84 @@ void sendFile(int clientSock, char* filename)//take in a client socket
     
 }
 
+/*
+ * Function to get the file list from the file hash table
+ * @param list Pointer to where the list should be stored
+ * @param file_table Pointer to the file hash table to list
+ */
+void getList(file_info** list, file_info** file_table, int numEntries)
+{
+	*list = malloc(sizeof(file_info)*(numEntries+1));//malloc space for the file list and header entry
+	memset(*list,0,sizeof(file_info)*(numEntries+1));
+	strcpy((*list)[0].filename,"header");
+	(*list)[0].checksum[0] = (char)numEntries;
+
+
+	int index=1;
+	int j=0;
+	while(j<FILETABLE_SIZE)
+	{
+		if((*file_table)[j].filename[0]!=0)
+		{
+			(*list)[index] = (*file_table)[j];
+			index++;
+		}
+		j++;
+	}
+}
+
+
+int updateFiles(file_info** file_table)
+{
+	memset((*file_table),0,sizeof(file_info)*FILETABLE_SIZE);
+	int numEntries = 0;
+	char result[32];
+	//open pipe to the command
+	FILE *fd = popen("find . -maxdepth 1 -type f -name '*.mp3' -o -name '*.wav' -o -name '*.flac' -o -name '*.ogg' | cut -d '/' -f 2","r");
+	int i = 0;
+	while(fgets(result,31,fd) != NULL)
+	{
+		char *newline = strstr(result,"\n");
+		*newline = '|';//replace newline with another character
+
+		char *filename;
+		filename = strtok(result,"|");//get the filename without the newline
+
+		char hash_cmd[60];
+		strcpy(hash_cmd,"md5sum ");//build command "md5sum [filename] | cut -d ' ' -f 1"
+		strcat(hash_cmd,filename);
+		strcat(hash_cmd," | cut -d ' ' -f 1");
+
+		//compute the file checksum with md5sum
+		FILE *hash_fd = popen(hash_cmd,"r");
+		char checksum[34];
+		while(fgets(checksum,33,hash_fd) != NULL)
+		{
+			if(*checksum!='\n')
+			{
+				file_info entry;
+				strcpy(entry.filename,filename);
+				strcpy(entry.checksum,checksum);
+				int index = fnv_hash(entry.filename,strlen(entry.filename))%FILETABLE_SIZE;
+				(*file_table)[index] = entry;
+				numEntries++;
+			}
+		}
+		i++;
+		pclose(hash_fd);
+	}
+	pclose(fd);
+	return numEntries;
+}
+
+unsigned int fnv_hash (void* key, int len)
+{
+    unsigned char* p = key;
+    unsigned int h = 2166136261;
+    int i;
+
+    for (i = 0; i < len; i++)
+        h = (h*16777619) ^ p[i];
+
+    return h;
+}
