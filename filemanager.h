@@ -1,7 +1,8 @@
 #include"types.h"
 #define FILETABLE_SIZE 1000
 
-void serialize_info(char* buf, file_info data);//serialize a file_info struct
+serial_file_info* serialize_info(file_info data);//serialize a file_info struct
+file_info* deserialize_info(serial_file_info);
 void server_list(connection* connect_info, file_info** result);//run filemanager ops for list commands on the server
 void client_diff(connection* connect_info, file_info** list, file_info** result);//run filemanager ops for diff commands on the client
 int updateFiles(file_info** file_table);//update the local file table

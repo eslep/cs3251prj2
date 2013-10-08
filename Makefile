@@ -32,7 +32,7 @@ debug:
 	gcc filemanager.c -g -o filemanager
 
 fm-test:
-	gcc filemanager.c test.c -o filemanager_test
+	gcc filemanager.c test.c -g -o filemanager_test
 
 clean:
 	rm -f nameChanger filemanager threadedServer filemanager_test *.o

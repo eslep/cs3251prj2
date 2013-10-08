@@ -56,20 +56,42 @@ char* filetypes[] = {"*.mp3","*.wav","*.ogg","*.flac","*.aac","*.wma"};
 		j++;
 	}
 	free(diff);
-	free(list);
+	free(list)
 }*/
 
-void serialize_info(char* buf, file_info data)
+serial_file_info* serialize_info(file_info data)
 {
 	uint16_t* input = (uint16_t*)(&data);
 	int i=0;
 	while( i<(sizeof(data)/2) )
 	{
-		*input = htons(*input);
+		input[i] = htons(input[i]);
 		i++;
 	}
+	serial_file_info* toReturn = malloc(sizeof(serial_file_info));
+	(*toReturn).buf = malloc(sizeof(data));
+	memcpy((*toReturn).buf,input,sizeof(data));
+	(*toReturn).length = (i-1);
+	return toReturn;
+}
+
+file_info* deserialize_info(serial_file_info data)
+{
+	uint16_t* input = data.buf;
+	int i=0;
+	while( i<data.length)
+	{
+		input[i] = ntohs(input[i]);
+		i++;
+	}
+	file_info* toReturn = (file_info*)input;
+	return toReturn;
+}
+
+void serialize_info_packet(char* buf, info_packet data)
+{
+	uint16_t* input = (uint16_t*)(&data);
 	buf = malloc(sizeof(data));
-	memcpy(buf,input,sizeof(data));
 }
 
 void server_list(connection* connect_info, file_info** result)
@@ -125,7 +147,6 @@ int updateFiles(file_info** file_table)
 				strcpy(entry.filename,filename);
 				strcpy(entry.checksum,checksum);
 				int index = fnv_hash(entry.filename,strlen(entry.filename))%FILETABLE_SIZE;
-				printf("Hash result: %d\n",index);
 				(*file_table)[index] = entry;
 				numEntries++;
 			}

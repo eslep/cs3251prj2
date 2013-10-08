@@ -1,3 +1,4 @@
+#include<stdint.h>
 #define SNDBUFSIZE 512
 #define RCVBUFSIZE 512
 
@@ -6,6 +7,12 @@ typedef struct
 	char filename[32];
 	char checksum[34];
 } file_info;
+
+typedef struct
+{
+	int length;
+	uint16_t* buf;
+} serial_file_info;
 
 typedef struct
 {

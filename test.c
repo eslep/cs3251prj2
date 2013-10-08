@@ -10,8 +10,13 @@ int main()
 	file_info* list2 = malloc(2*sizeof(file_info));
 	strcpy(list2[0].filename,"header");
 	list2[0].checksum[0] = (char)1;
-	strcpy(list2[1].filename,"1.mp3");
-	strcpy(list2[1].checksum,"d41d8cd98f00b204e9800998ecf8427e");
+	strcpy(list2[1].filename,"04-TwentyninePalms.mp3");
+	strcpy(list2[1].checksum,"f2a9f141647ca3fa2783b4b079e3ad91");
+	printf("Before: filename: %s checksum: %s\n",list2[1].filename,list2[1].checksum);
+	serial_file_info* result = serialize_info(list2[1]);
+	
+	file_info* result2 = deserialize_info((*result));
+	printf("After: filename: %s checksum: %s\n",(*result2).filename,(*result2).checksum);
 	file_info* list;
 	getList(&list, (file_info**)(&file_table), numEntries);
 	int i=0;
