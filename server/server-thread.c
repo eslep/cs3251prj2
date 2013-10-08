@@ -19,15 +19,17 @@
 #include <pthread.h>
 #include "types.h"
 #include "filemanager.h"
+#include <stdint.h>
+
 #define MAXPENDING 5 //Maximum outstanding connection
 
 
 void DieWithError(char*errorMessage); //Error handling function
-void HandleTCPClient(int clntSocket); //TCP client handling function
 int CreateTCPServerSocket(unsigned short port); //Create TCP server socket
 int AcceptTCPConnection(int servSock); //accept tcp connection request
 void *ThreadMain(void *arg);            //Structure of arguments to pass to client thread
-void HandleTCPClient(int clntSocket);
+int HandleTCPClient(int clntSocket);
+void ReceiveFile(int clientSock);
 
 //Structure of arguments to pass to client thread
 typedef struct ThreadArgs
@@ -136,10 +138,14 @@ void *ThreadMain(void *threadArgs)
     
     //extract socket file descriptor from argument
     clntSock = ((struct ThreadArgs *) threadArgs) -> clntSock;
-    free(threadArgs);      //deallocate memory for argument
-    
-    HandleTCPClient(clntSock);
-    
+//  free(threadArgs);      //deallocate memory for argument
+    int go=1;
+    while(go==1)
+    {
+    go=HandleTCPClient(clntSock);
+    }
+        free(threadArgs);      //deallocate memory for argument
+
     return (NULL);
 }
 
@@ -151,8 +157,7 @@ void HandleCommand(char* cmd)
 {
 
 }
-
-void HandleTCPClient(int clntSocket)
+int HandleTCPClient(int clntSocket)
 {
     //printf("handling client");
     char echoBuffer[RCVBUFSIZE];   //Buffer for echo string
@@ -162,27 +167,37 @@ void HandleTCPClient(int clntSocket)
     //recieve message from client
     if((recvMsgSize = recv(clntSocket, echoBuffer, RCVBUFSIZE, 0))<0)
         DieWithError("recv() failed");
+
+
     
     // Send received string and receive again until end of transmission
-    while(recvMsgSize>0)
+    if(recvMsgSize>0)
     {
         //Echo message back to client
             if(send(clntSocket, echoBuffer, recvMsgSize, 0) != recvMsgSize)
                 DieWithError("send() failed");
         
             // See if there is more data to receive
-            if((recvMsgSize = recv(clntSocket, echoBuffer, RCVBUFSIZE, 0)) <0)
-                DieWithError("recv() failed");
+           /* if((recvMsgSize = recv(clntSocket, echoBuffer, RCVBUFSIZE, 0)) <0)
+                DieWithError("recv() failed");*/
     }
-    
-    printf("echoBuffer:%s\n", echoBuffer);
+            printf("Command:%s\n", echoBuffer);
+
     /*int size= (sizeof(echoBuffer)/sizeof(echoBuffer[0]));
     printf("Size: %u", size);*/
     if(echoBuffer[0]=='s')
+    {
         printf("hell yeah\n");
-    //handleCommand(echoBuffer)
-    
-    printf("close:\n");
+        ReceiveFile(clntSocket);
+    }
+    if(echoBuffer[0]=='q')
+    {
+        printf("close:\n");
+        close(clntSocket);
+        return 0;
+    }
+    return 1;
+
 }
 
 void DieWithError(char *errorMessage)
@@ -190,6 +205,91 @@ void DieWithError(char *errorMessage)
     perror(errorMessage);
     exit(1);
 }
+
+void ReceiveFile(int clientSock)
+{
+     /*int numberOfReceivedBytes=0;
+    while (numberOfReceivedBytes<fileSize){
+        numberOfReceivedBytes+=recv(newSocket,buffer + numberOfReceivedBytes,sizeof(*buffer),0)
+    }*/
     
+    printf("Recieve\n");
+    //Recieve Size Packet
+    /*long int sizeBuff[1];
+    memset(&sizeBuff,0,sizeof(long int));*/
+    uint32_t un=0;
+    if(recv(clientSock,&un,sizeof(uint32_t),0)<1)
+    {
+        DieWithError("Didn't get the long\n");
+    }
+    else
+    {
+        //sizeBuff[1]=ntohl(sizeBuff[1]);
+        //printf("Length: %ld\n",sizeBuff[1]);
+        un=ntohl(un);
+        printf("Length: %u\n",un);
+        
+    }
     
+    //Prepare to recieve data.
+    char recvBuff[RCVBUFSIZE];   //Buffer for echo string
+    memset(&recvBuff,0,RCVBUFSIZE);
+    char* filename = "receive";
+		FILE *filestream = fopen(filename, "a");
+		if(filestream == NULL)
+        {
+			DieWithError("Cannot open new file on server.\n");
+        }
+		else
+		{
+            printf("Recieve2\n");
+
+			memset(&recvBuff,0, RCVBUFSIZE);
+			int fileChunk = 0;
+            int temp=0;
+            int total=0;
+            printf("Recieve3\n");
+			//while((fileChunk = recv(clientSock, recvBuff, RCVBUFSIZE, 0)) > 0)
+            while((fileChunk = recv(clientSock, recvBuff, RCVBUFSIZE, 0)) > 0 && (total+=fileChunk)<un)
+            {
+                printf("recieve: %u\n",temp);
+                temp=temp+1;
+			    int write_sz = fwrite(recvBuff, sizeof(char), fileChunk, filestream);
+  
+                   // printf("Chunk: %s\n",recvBuff);
+                
+				if(write_sz < fileChunk)
+			    {
+			        printf("File write failed.\n");
+                    break;
+        
+                    memset(&recvBuff,0, RCVBUFSIZE);
+                   /* if (fileChunk == 0 || fileChunk != 512)
+                    {
+                        break;
+                    }*/
+                }
+            }
+            printf("recieve: %u\n",temp);
+            temp=temp+1;
+            int write_sz = fwrite(recvBuff, sizeof(char), fileChunk, filestream);
+            
+            // printf("Chunk: %s\n",recvBuff);
+            
+            if(write_sz < fileChunk)
+            {
+                printf("File write failed.\n");
+            }
+			if(fileChunk < 0)
+		    {
+
+	                DieWithError("recv() failed");
+        	}
+			printf("Ok received from client!\n");
+			fclose(filestream);
+        }
+}
+
+
+
     
