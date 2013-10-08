@@ -59,27 +59,28 @@ char* filetypes[] = {"*.mp3","*.wav","*.ogg","*.flac","*.aac","*.wma"};
 	free(list)
 }*/
 
-serial_file_info* serialize_info(file_info data)
+serial_file_info* serialize_info(file_info* data)
 {
-	uint16_t* input = (uint16_t*)(&data);
+	uint16_t* input = (uint16_t*)(data);
 	int i=0;
-	while( i<(sizeof(data)/2) )
+	while( i<sizeof(file_info) )
 	{
 		input[i] = htons(input[i]);
 		i++;
 	}
 	serial_file_info* toReturn = malloc(sizeof(serial_file_info));
-	(*toReturn).buf = malloc(sizeof(data));
-	memcpy((*toReturn).buf,input,sizeof(data));
+	(*toReturn).buf = malloc(sizeof(*data));
+	memcpy((*toReturn).buf,input,sizeof(*data));
 	(*toReturn).length = (i-1);
 	return toReturn;
 }
 
-file_info* deserialize_info(serial_file_info data)
+file_info* deserialize_info(serial_file_info* data)
 {
-	uint16_t* input = data.buf;
+	uint16_t* input = (*data).buf;
+	//printf("input: %x\n",*input);
 	int i=0;
-	while( i<data.length)
+	while(i<sizeof((*data).buf))
 	{
 		input[i] = ntohs(input[i]);
 		i++;
@@ -94,15 +95,15 @@ void serialize_info_packet(char* buf, info_packet data)
 	buf = malloc(sizeof(data));
 }
 
-void server_list(connection* connect_info, file_info** result)
+void server_list(file_info** result)
 {
 	file_info* file_table = malloc(sizeof(file_info)*FILETABLE_SIZE);
-	int numEntries = updateFiles((file_info**)(&file_table));
+	int numEntries = updateFiles((&file_table));
 	getList(result, (file_info**)(&file_table), numEntries);
 	free(file_table);
 }
 
-void client_diff(connection* connect_info, file_info** list, file_info** result)
+void client_diff(file_info** list, file_info** result)
 {
 	file_info* file_table = malloc(sizeof(file_info)*FILETABLE_SIZE);
 	int numEntries = updateFiles((file_info**)(&file_table));
@@ -167,10 +168,10 @@ int updateFiles(file_info** file_table)
 void getList(file_info** list, file_info** file_table, int numEntries)
 {
 	*list = malloc(sizeof(file_info)*(numEntries+1));//malloc space for the file list and header entry
-	file_info header;
-	strcpy(header.filename,"header");
-	header.checksum[0] = (char)numEntries;
-	*list[0] = header;
+	memset(*list,0,sizeof(file_info)*(numEntries+1));
+	strcpy((*list)[0].filename,"header");
+	(*list)[0].checksum[0] = (char)numEntries;
+	
 
 	int index=1;
 	int j=0;

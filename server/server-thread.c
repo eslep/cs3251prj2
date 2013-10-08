@@ -17,7 +17,7 @@
 #include <arpa/inet.h>
 #include <string.h>
 #include <pthread.h>
-#include "../filemanager.h"ls
+#include "../filemanager.h"
 #include <stdint.h>
 
 #define MAXPENDING 5 //Maximum outstanding connection
@@ -29,6 +29,7 @@ int AcceptTCPConnection(int servSock); //accept tcp connection request
 void *ThreadMain(void *arg);            //Structure of arguments to pass to client thread
 int HandleTCPClient(int clntSocket);
 void ReceiveFile(int clientSock, char* filename);
+void sendCharStream(int clientSock, char* stream, int length);
 
 //Structure of arguments to pass to client thread
 typedef struct ThreadArgs
@@ -74,7 +75,7 @@ int main(int argc, char *argv[])
             DieWithError("pthread_create() failed");
         client_list[numClients] = new_client;
 	numClients++;
-        printf("with thread %ld\n",(long int) threadID);
+        printf("with thread %ld\n",(long int) new_client.threadID);
     }
 }
 
@@ -137,13 +138,13 @@ void *ThreadMain(void *threadArgs)
     
     //extract socket file descriptor from argument
     clntSock = ((struct ThreadArgs *) threadArgs) -> clntSock;
-//  free(threadArgs);      //deallocate memory for argument
+    free(threadArgs);      //deallocate memory for argument
     int go=1;
     while(go==1)
     {
     go=HandleTCPClient(clntSock);
     }
-        free(threadArgs);      //deallocate memory for argument
+        //free(threadArgs);      //deallocate memory for argument
 
     return (NULL);
 }
@@ -180,7 +181,9 @@ int HandleTCPClient(int clntSocket)
            /* if((recvMsgSize = recv(clntSocket, echoBuffer, RCVBUFSIZE, 0)) <0)
                 DieWithError("recv() failed");*/
     }
-            printf("Command:%s\n", echoBuffer);
+    if(recvMsgSize==0)
+	return 0;
+            //printf("Command:%s\n", echoBuffer);
 
     /*int size= (sizeof(echoBuffer)/sizeof(echoBuffer[0]));
     printf("Size: %u", size);*/
@@ -194,6 +197,27 @@ int HandleTCPClient(int clntSocket)
         printf("close:\n");
         close(clntSocket);
         return 0;
+    }
+    if(echoBuffer[0]=='l')
+    {
+	file_info* file_list;
+        server_list(&file_list);
+	file_info* header = &(file_list[0]);
+	int list_len = (*header).checksum[0];
+
+	serial_file_info* serial_header = serialize_info(header);
+	sendCharStream(clntSocket, (char*)(*serial_header).buf, (*serial_header).length);
+	
+	/*file_info* remaining = filelist[1];
+	int i=0;
+	while(i<list_len)
+	{
+		serial_file_info* serialized = serialize_info(remaining[i]);
+		message_len = (*serialized).length;
+		sendCharStream(clntSocket, (*serialized).buf, message_len);
+	}*/
+	free(header);
+	free(serial_header);
     }
     return 1;
 
@@ -290,7 +314,31 @@ void ReceiveFile(int clientSock, char* filename)
         }
 }
 
-
+void sendCharStream(int clientSock, char* stream, int length)// take in a socket and a stream to send
+{
+    
+    unsigned char sndBuf[SNDBUFSIZE];	    /* Send Buffer */
+    
+    int i;			    /* Counter Value */
+    
+    memset(sndBuf, 0, RCVBUFSIZE);
+    memcpy(sndBuf, stream, length);
+     /* Send the string to the server */
+   // printf("\nLength: %u\n",flag);
+    unsigned int sentBytes=send(clientSock,sndBuf,SNDBUFSIZE,0);
+    int j=0;
+    printf("sndBuf: ");
+    while(j<SNDBUFSIZE)
+    {
+	printf("%x",sndBuf[j]);
+	j++;
+    }
+    printf("\n");
+    //printf ("sentBytes: %u", sentBytes);
+    if(sentBytes!=length)
+        DieWithError("send() sent a different number of bytes than expected");
+    
+}
 
 void sendFile(int clientSock, char* filename)//take in a client socket
 {

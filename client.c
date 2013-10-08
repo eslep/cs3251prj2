@@ -17,12 +17,13 @@
 #include <openssl/evp.h>	    /* for OpenSSL EVP digest libraries/SHA256 */
 #include <sys/stat.h>
 #include <stdint.h>
+#include "filemanager.h"
 
 /* Constants */
 #define RCVBUFSIZE 512		    /* The receive buffer size */
 #define SNDBUFSIZE 512		    /* The send buffer size */
 #define MDLEN 32
-void sendCommand(int clientSock, unsigned char command);// take in a socket and a command
+void sendCommand(int clientSock, unsigned char* command);// take in a socket and a command
 void sendFile(int clientSock, char* filename);
 int createSocket(char* addr);
 struct stat st;
@@ -40,6 +41,7 @@ int main(int argc, char *argv[])
     char * address="127.0.0.1";
     unsigned char flag ='a';
     int clientSock;
+
 
     if(argc==2)
     {
@@ -65,11 +67,35 @@ int main(int argc, char *argv[])
     {
         /*if(flag=='l')
             executeLS(flag);*/
-        sendCommand(clientSock,flag);
+	char recvBuf[RCVBUFSIZE];
+	switch(flag)
+	{
+		case 'l':
+			sendCommand(clientSock,&flag);
+			int bytesRecv = recv(clientSock, recvBuf, RCVBUFSIZE, 0);
+			printf("recvBuf: ");
+			int j=0;
+   			while(j<RCVBUFSIZE)
+    			{
+				printf("%x",recvBuf[j]);
+				j++;
+    			}
+   			 printf("\n");
+
+			serial_file_info* serial_header = malloc(sizeof(serial_file_info));
+			memset(serial_header,0,sizeof(serial_file_info));
+			memcpy(serial_header,recvBuf,sizeof(serial_file_info));
+
+			file_info* header = deserialize_info(serial_header);
+			//free((*serial_header).buf);
+			free(serial_header);
+			//printf("Header: Filename: %s Length: %d\n",(*header).filename,(*header).checksum[0]);
+	}
+        
     }
     else if(flag=='s')
     {
-        sendCommand(clientSock,flag);
+        sendCommand(clientSock,&flag);
         //sendFile(clientSock,"test");
         sendFile(clientSock,"02 Everything Is Alright.m4a");
 
@@ -86,7 +112,8 @@ int main(int argc, char *argv[])
         printf("Invalid Command: Enter h for help\n");
     }
    }
-    sendCommand(clientSock,'q');
+    char* q = "q";
+    sendCommand(clientSock,q);
 
    close(clientSock);
 }
@@ -126,42 +153,22 @@ int createSocket(char* addr)
 }
 
 
-void sendCommand(int clientSock, unsigned char command)// take in a socket and a command
+void sendCommand(int clientSock, unsigned char* command)// take in a socket and a command
 {
     
     unsigned char sndBuf[SNDBUFSIZE];	    /* Send Buffer */
     
     int i;			    /* Counter Value */
     
-    memset(&sndBuf, 0, RCVBUFSIZE);
+    memset(sndBuf, 0, RCVBUFSIZE);
      /* Send the string to the server */
     /*	    FILL IN	 */
-    unsigned int StringLen=strlen(&command);//strlen(message);
+    unsigned int StringLen=strlen(command);//strlen(message);
    // printf("\nLength: %u\n",flag);
-    unsigned int sentBytes=send(clientSock,&command,StringLen,0);
+    unsigned int sentBytes=send(clientSock,command,StringLen,0);
     //printf ("sentBytes: %u", sentBytes);
     if(sentBytes!=StringLen)
         DieWithError("send() sent a different number of bytes than expected");
-
-    /* Receive and print response from the server */
-    /*	    FILL IN	 */
-    memset(&sndBuf, 0, RCVBUFSIZE);
-    int totalBytesRcvd=0;
-    int bytesRcvd=0;
-   // printf("Received: ");
-        while(totalBytesRcvd<StringLen)
-        {
-            if((bytesRcvd=recv(clientSock,sndBuf,RCVBUFSIZE-1,0))<=0)
-                DieWithError("recv() failed or connection closed prematurely");
-            totalBytesRcvd+=bytesRcvd; //Tally total bytes
-            //sndBuf[bytesRcvd]='\0';
-           
-            
-        }
-    //printf(rcvBuf);
-    printf("RCVBuff: \n");
-    printf("%s\n", sndBuf);
-    printf("\n");
     
 }
 
@@ -185,7 +192,7 @@ void sendFile(int clientSock, char* filename)//take in a client socket
     
     //send size packet
     /*long int sizeBuff[1];
-    memset(&sizeBuff,0,sizeof(long int));
+    memset(sizeBuff,0,sizeof(long int));
     printf("Length: %ld\n",sizeBuff[1]);
     sizeBuff[1]=lengthOfFile;
     printf("Length: %ld\n",sizeBuff[1]);
@@ -199,7 +206,7 @@ void sendFile(int clientSock, char* filename)//take in a client socket
 
     //Prepare to send data
     unsigned char sndBuf[SNDBUFSIZE];	    /* Send Buffer */
-    memset(&sndBuf, 0, RCVBUFSIZE);
+    memset(sndBuf, 0, RCVBUFSIZE);
     printf("Sending %s to the server... ", filename);
     FILE *filestream = fopen(filename, "r");
     if(filestream == NULL)
@@ -207,7 +214,7 @@ void sendFile(int clientSock, char* filename)//take in a client socket
         DieWithError("ERROR: File");
     }
 
-		memset(&sndBuf,0, SNDBUFSIZE);
+		memset(sndBuf,0, SNDBUFSIZE);
 		int fileChunk;
         int totalSize=0;
         int temp=0;
@@ -250,7 +257,7 @@ void ReceiveFile(int clientSock, char* filename)
     printf("Recieve\n");
     //Recieve Size Packet
     /*long int sizeBuff[1];
-    memset(&sizeBuff,0,sizeof(long int));*/
+    memset(sizeBuff,0,sizeof(long int));*/
     uint32_t un=0;
     if(recv(clientSock,&un,sizeof(uint32_t),0)<1)
     {
@@ -267,7 +274,7 @@ void ReceiveFile(int clientSock, char* filename)
     
     //Prepare to recieve data.
     char recvBuff[RCVBUFSIZE];   //Buffer for echo string
-    memset(&recvBuff,0,RCVBUFSIZE);
+    memset(recvBuff,0,RCVBUFSIZE);
 		FILE *filestream = fopen(filename, "a");
 		if(filestream == NULL)
         {
@@ -277,7 +284,7 @@ void ReceiveFile(int clientSock, char* filename)
 		{
             printf("Recieve2\n");
 
-			memset(&recvBuff,0, RCVBUFSIZE);
+			memset(recvBuff,0, RCVBUFSIZE);
 			int fileChunk = 0;
             int temp=0;
             int total=0;
@@ -298,7 +305,7 @@ void ReceiveFile(int clientSock, char* filename)
 			        printf("File write failed.\n");
                     break;
         
-                    memset(&recvBuff,0, RCVBUFSIZE);
+                    memset(recvBuff,0, RCVBUFSIZE);
                    /* if (fileChunk == 0 || fileChunk != 512)
                     {
                         break;

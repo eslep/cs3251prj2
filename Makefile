@@ -19,14 +19,14 @@ ifeq ($(OS), SunOS)
 all: client server-thread
 
 client: client.c
-	$(CC) client.c  -o nameChanger
+	$(CC) filemanager.c client.c -g -o nameChanger
 
 server-thread: server/server-thread.c
 
-	$(CC) -pthread -lcrypto server/server-thread.c -o threadedServer
+	$(CC) -pthread -lcrypto filemanager.c server/server-thread.c -g -o threadedServer
 
 fm:
-	gcc filemanager.c -o filemanager
+	gcc filemanager.c -o filemanager.o
 
 debug:
 	gcc filemanager.c -g -o filemanager
