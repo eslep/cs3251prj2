@@ -17,8 +17,7 @@
 #include <arpa/inet.h>
 #include <string.h>
 #include <pthread.h>
-#include "types.h"
-#include "filemanager.h"
+#include "../filemanager.h"ls
 #include <stdint.h>
 
 #define MAXPENDING 5 //Maximum outstanding connection
@@ -29,7 +28,7 @@ int CreateTCPServerSocket(unsigned short port); //Create TCP server socket
 int AcceptTCPConnection(int servSock); //accept tcp connection request
 void *ThreadMain(void *arg);            //Structure of arguments to pass to client thread
 int HandleTCPClient(int clntSocket);
-void ReceiveFile(int clientSock);
+void ReceiveFile(int clientSock, char* filename);
 
 //Structure of arguments to pass to client thread
 typedef struct ThreadArgs
@@ -188,7 +187,7 @@ int HandleTCPClient(int clntSocket)
     if(echoBuffer[0]=='s')
     {
         printf("hell yeah\n");
-        ReceiveFile(clntSocket);
+        ReceiveFile(clntSocket, "server/receive.m4a");
     }
     if(echoBuffer[0]=='q')
     {
@@ -206,7 +205,7 @@ void DieWithError(char *errorMessage)
     exit(1);
 }
 
-void ReceiveFile(int clientSock)
+void ReceiveFile(int clientSock, char* filename)
 {
      /*int numberOfReceivedBytes=0;
     while (numberOfReceivedBytes<fileSize){
@@ -234,7 +233,6 @@ void ReceiveFile(int clientSock)
     //Prepare to recieve data.
     char recvBuff[RCVBUFSIZE];   //Buffer for echo string
     memset(&recvBuff,0,RCVBUFSIZE);
-    char* filename = "receive";
 		FILE *filestream = fopen(filename, "a");
 		if(filestream == NULL)
         {
@@ -254,6 +252,8 @@ void ReceiveFile(int clientSock)
             {
                 printf("recieve: %u\n",temp);
                 temp=temp+1;
+                int i=0;
+                
 			    int write_sz = fwrite(recvBuff, sizeof(char), fileChunk, filestream);
   
                    // printf("Chunk: %s\n",recvBuff);
@@ -292,4 +292,78 @@ void ReceiveFile(int clientSock)
 
 
 
+void sendFile(int clientSock, char* filename)//take in a client socket
+{
     
+    /* Send the string to the server */
+    /*	    FILL IN	 */
+   
+    /**int numberOfSentBytes=0;
+    while (numberOfSentBytes<fileSize){
+        numberOfSentBytes+=send(clientSock,buffer+numberOfSentBytes,fileSize-numberOfSentBytes+1,0);
+    }*/
+    
+    //Find size of file
+    FILE *fp = fopen(filename, "r");
+    fseek(fp, 0, SEEK_END);
+    printf("seek\n");
+    long int lengthOfFile = ftell(fp);
+    fclose(fp);
+    
+    //send size packet
+    /*long int sizeBuff[1];
+    memset(&sizeBuff,0,sizeof(long int));
+    printf("Length: %ld\n",sizeBuff[1]);
+    sizeBuff[1]=lengthOfFile;
+    printf("Length: %ld\n",sizeBuff[1]);
+    sizeBuff[1]=htonl(sizeBuff[1]);
+    printf("Length: %ld\n",sizeBuff[1]);
+
+    send(clientSock,sizeBuff,sizeof(long int),0);*/
+    uint32_t un = htonl(lengthOfFile);
+    send(clientSock, &un, sizeof(uint32_t), 0);
+            printf("Length: %u\n",un);
+
+    //Prepare to send data
+    unsigned char sndBuf[SNDBUFSIZE];	    /* Send Buffer */
+    memset(&sndBuf, 0, RCVBUFSIZE);
+    printf("Sending %s to the server... ", filename);
+    FILE *filestream = fopen(filename, "r");
+    if(filestream == NULL)
+    {
+        DieWithError("ERROR: File");
+    }
+
+		memset(&sndBuf,0, SNDBUFSIZE);
+		int fileChunk;
+        int totalSize=0;
+        int temp=0;
+		while((fileChunk = fread(sndBuf, sizeof(char), SNDBUFSIZE, filestream)) > 0)
+		{
+            printf("sent: %u\n",temp);
+           // printf("Chunk: %s\n",sndBuf);
+
+            temp=temp+1;
+            totalSize+=fileChunk;
+            int count=0;
+            
+            int t=send(clientSock, sndBuf, fileChunk, 0);
+            count+=t;
+            int i=0;
+          
+		    while(count < fileChunk && t>0)
+		    {
+                 t=send(clientSock, sndBuf, fileChunk, 0);
+		    }
+            
+            
+		memset(sndBuf,0, SNDBUFSIZE);
+		}
+		printf("Ok file %s sent from client!\n", filename);
+        		memset(sndBuf,0, SNDBUFSIZE);
+
+	//}
+   
+    
+}
+
